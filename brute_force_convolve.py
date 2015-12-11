@@ -13,6 +13,7 @@ import warnings
 
 
 class PatternAtROIBorderWarning(UserWarning):
+
     """
     A warning that is issued when the PatternFinder retuns the best match
     coordinates at the border of the ROI. This indicates that the true global
