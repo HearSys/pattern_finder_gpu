@@ -10,9 +10,10 @@ import gc
 import pyopencl as cl
 import numpy as np
 import warnings
+import os
 
 # Filename containing the src of the kernel
-CONVOLVE_WITH_WEIGHTING_CL_KERNEL_FILENAME = "convolve_with_weighting.cl"
+CONVOLVE_WITH_WEIGHTING_CL_KERNEL_FILENAME = os.path.dirname(__file__) + "/convolve_with_weighting.cl"
 
 
 class PatternAtROIBorderWarning(UserWarning):
