@@ -2,6 +2,7 @@
 
 """
 
+import warnings
 
 
 def center_roi_around(center_rc, size_hw):
@@ -23,10 +24,11 @@ def center_roi_around(center_rc, size_hw):
         numbers are even, a UserWarning is issued.
     """
     height, width = size_hw
-    if height % 2 == 0:
-        raise UserWarning("ROI with even height is not centered.")
-    if width % 2 == 0:
-        raise UserWarning("ROI with even width is not centered.")
+
+    if height % 2 == 0 or width % 2 == 0:
+        warnings.warn("ROI with even height and width cannot be exactly "
+                      "centered. The (height, width)=({height}, {width})"
+                      .format(height=height, width=width))
 
     row, col = int(round(center_rc[0])), int(round(center_rc[1]))
     return (row - height//2,
