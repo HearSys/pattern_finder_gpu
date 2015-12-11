@@ -28,13 +28,6 @@ def center_roi_around(center_rc, size_hw):
     if width % 2 == 0:
         raise UserWarning("ROI with even width is not centered.")
 
-
-def test_center_roi_around():
-    import numpy as np
-    test_roi = [0, 0, 10, 10]
-    assert np.allclose(center_roi_around((5, 5), (10, 10)), test_roi)
-    test_roi = [0, 0, 1, 1]  # this is a 1x1 ROI
-    assert np.allclose(center_roi_around((0, 0), (1, 1)), test_roi)
     row, col = int(round(center_rc[0])), int(round(center_rc[1]))
     return (row - height//2,
             col - width//2,
