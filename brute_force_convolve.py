@@ -13,7 +13,11 @@ import warnings
 
 
 class PatternAtROIBorderWarning(UserWarning):
-    ...
+    """
+    A warning that is issued when the PatternFinder retuns the best match
+    coordinates at the border of the ROI. This indicates that the true global
+    minimal value might be outside of the ROI.
+    """
 
 
 class PatternFinder():
@@ -134,6 +138,9 @@ class PatternFinder():
         return image_gpu
 
     def set_pattern(self, pattern):
+        """
+        Assign and upload a pattern image to the GPU for the find method.
+        """
         # Check that pattern is an RGBA image
         assert pattern.ndim == 3 and pattern.shape[2] == 4, "pattern has to be a 4-channel RGBA image."
         if pattern.shape[0] % 2 == 0:
@@ -144,6 +151,9 @@ class PatternFinder():
         self._target_gpu = self._upload_image(pattern)
 
     def set_image(self, image):
+        """
+        Assign and upload an image to the GPU for the find method.
+        """
         self._image_gpu = self._upload_image(image)
 
     def find(self, pattern=None, image=None, roi=None):
