@@ -172,8 +172,6 @@ class PatternFinder():
             output_final += outputs[i]
         del outputs
         del outputs_gpu
-        del target_gpu
-        del image_gpu
         self.queue.flush()
         gc.collect()
         idx = np.array(np.unravel_index(output_final.argmin(), output_final.shape))
