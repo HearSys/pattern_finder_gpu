@@ -144,10 +144,11 @@ class PatternFinder():
         """
         # Check that pattern is an RGBA image
         assert pattern.ndim == 3 and pattern.shape[2] == 4, "pattern has to be a 4-channel RGBA image."
-        if pattern.shape[0] % 2 == 0:
-            warnings.warn("pattern should have an odd number of rows")
-        if pattern.shape[1] % 2 == 0:
-            warnings.warn("pattern has to have an odd number of columns")
+
+        if pattern.shape[0] % 2 == 0 or pattern.shape[1] % 2 == 0:
+            warnings.warn("For best results, pattern should have an odd "
+                          "number of columns/rows but the shape is: {}".format(pattern.shape),
+                          stacklevel=2)
 
         self._target_gpu = self._upload_image(pattern)
 
