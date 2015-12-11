@@ -25,6 +25,20 @@ class PatternAtROIBorderWarning(UserWarning):
     """
 
 
+def idx_array_split(length, n_parts):
+    parts = []
+    Neach_section, extras = divmod(length, n_parts)
+    section_sizes = ([0] +
+                     extras * [Neach_section+1] +
+                     (n_parts-extras) * [Neach_section])
+    div_points = np.array(section_sizes).cumsum()
+    for i in range(n_parts):
+        st = div_points[i]
+        end = div_points[i + 1]
+        parts.append(end-st)
+    return parts
+
+
 class PatternFinder():
 
     """Find a given pattern in an image (OpenCL accelerated implementation)"""
@@ -128,7 +142,7 @@ class PatternFinder():
 
         partitions = min(image_gpu.shape[1], self.partitions)
         # split the image into self.partitions parts but not more than rows in the image
-        splitted_image = np.array_split(image, partitions, axis=0)
+        parts = idx_array_split(length=image_gpu.shape[1], n_parts=partitions)
 
         output_final = np.zeros((roi[2]-roi[0], roi[3]-roi[1]), dtype=np.float32)
 
@@ -138,7 +152,7 @@ class PatternFinder():
                        for out in outputs]
 
         image_start_row = 0
-        for part, out_gpu in zip(splitted_image, outputs_gpu):
+        for part, out_gpu in zip(parts, outputs_gpu):
             self._opencl_prg.convolve_image(self.queue,
                                             output_final.shape,  # --> height, width -> {get_global_id(0), get_global_id(1)} in kernel
                                             None,  # no local workgroups
@@ -146,10 +160,10 @@ class PatternFinder():
                                             self.sampler_gpu,
                                             np.array([roi[0], roi[1]], dtype=np.int32),  # start_row, start_col in image
                                             np.int32(image_start_row),
-                                            np.int32(image_start_row+part.shape[0]))
+                                            np.int32(image_start_row+part))
             # For the next round, we have to adapt the start column
             # by the height of the current part
-            image_start_row += part.shape[0]
+            image_start_row += part
         assert image_start_row == image_gpu.shape[1], "${}".format(image_gpu.height, image_gpu.height, image_start_row)
         for i in range(partitions):
             cl.enqueue_copy(self.queue, outputs[i], outputs_gpu[i])
