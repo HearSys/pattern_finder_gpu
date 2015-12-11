@@ -131,8 +131,11 @@ class PatternFinder():
         if pattern is not None:
             self.set_pattern(pattern)
 
-        image_gpu = self._image_gpu
-        target_gpu = self._target_gpu
+        try:
+            image_gpu = self._image_gpu
+            target_gpu = self._target_gpu
+        except AttributeError:
+            raise Exception("No image or pattern available. Forgot to provide these or call set_image/set_pattern before?")
 
         # Compute the Region Of Interest if not given
         # (row_start, col_start, row_end, col_end)
