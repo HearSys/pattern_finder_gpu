@@ -139,13 +139,13 @@ class PatternFinder():
         image_start_row = 0
         for part, out_gpu in zip(splitted_image, outputs_gpu):
             self._opencl_prg.convolve_image(self.queue,
-                                           output_final.shape,  # --> height, width -> {get_global_id(0), get_global_id(1)} in kernel
-                                           None,  # no local workgroups
-                                           image_gpu, target_gpu, out_gpu,
-                                           self.sampler_gpu,
-                                           np.array([roi[0], roi[1]], dtype=np.int32),  # start_row, start_col in image
-                                           np.int32(image_start_row),
-                                           np.int32(image_start_row+part.shape[0]))
+                                            output_final.shape,  # --> height, width -> {get_global_id(0), get_global_id(1)} in kernel
+                                            None,  # no local workgroups
+                                            image_gpu, target_gpu, out_gpu,
+                                            self.sampler_gpu,
+                                            np.array([roi[0], roi[1]], dtype=np.int32),  # start_row, start_col in image
+                                            np.int32(image_start_row),
+                                            np.int32(image_start_row+part.shape[0]))
             # For the next round, we have to adapt the start column
             # by the height of the current part
             image_start_row += part.shape[0]
