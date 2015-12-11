@@ -111,24 +111,24 @@ class PatternFinder():
 
     def find(self, pattern=None, image=None, roi=None):
 
-        # Compute the Region Of Interest if not given (row_start, col_start, row_end, col_end)
-        # Including start row/cols but without row/col_end
-        if roi is None:
-            roi = (0, 0, image.shape[0], image.shape[1])
-
         if image is not None:
             self.set_image(image)
 
         if pattern is not None:
             self.set_pattern(pattern)
 
-        partitions = min(image.shape[0], self.partitions)
-
-        # split the image into self.partitions parts but not more than rows in the image
-        splitted_image = np.array_split(image, partitions, axis=0)
-
         image_gpu = self._image_gpu
         target_gpu = self._target_gpu
+
+        # Compute the Region Of Interest if not given
+        # (row_start, col_start, row_end, col_end)
+        # Including start row/cols but without row/col_end
+        if roi is None:
+            roi = (0, 0, image_gpu.shape[1], image_gpu.shape[0])
+
+        partitions = min(image_gpu.shape[1], self.partitions)
+        # split the image into self.partitions parts but not more than rows in the image
+        splitted_image = np.array_split(image, partitions, axis=0)
 
         output_final = np.zeros((roi[2]-roi[0], roi[3]-roi[1]), dtype=np.float32)
 
@@ -150,7 +150,7 @@ class PatternFinder():
             # For the next round, we have to adapt the start column
             # by the height of the current part
             image_start_row += part.shape[0]
-        assert image_start_row == image.shape[0], "${}".format(image.shape, image_start_row)
+        assert image_start_row == image_gpu.shape[1], "${}".format(image_gpu.height, image_gpu.height, image_start_row)
         for i in range(partitions):
             cl.enqueue_copy(self.queue, outputs[i], outputs_gpu[i])
         self.queue.finish()
