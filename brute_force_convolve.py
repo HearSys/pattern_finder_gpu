@@ -9,6 +9,7 @@ import sys
 import gc
 import pyopencl as cl
 import numpy as np
+import warnings
 
 
 class PatternAtROIBorderWarning(UserWarning):
@@ -136,9 +137,9 @@ class PatternFinder():
         # Check that pattern is an RGBA image
         assert pattern.ndim == 3 and pattern.shape[2] == 4, "pattern has to be a 4-channel RGBA image."
         if pattern.shape[0] % 2 == 0:
-            raise UserWarning("pattern should have an odd number of rows")
+            warnings.warn("pattern should have an odd number of rows")
         if pattern.shape[1] % 2 == 0:
-            raise UserWarning("pattern has to have an odd number of columns")
+            warnings.warn("pattern has to have an odd number of columns")
 
         self._target_gpu = self._upload_image(pattern)
 
