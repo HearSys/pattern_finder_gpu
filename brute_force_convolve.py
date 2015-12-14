@@ -178,4 +178,10 @@ class PatternFinder():
         self.queue.flush()
         gc.collect()
         idx = np.array(np.unravel_index(output_final.argmin(), output_final.shape))
+        if (idx[0] in (0, output_final.shape[0]-1) or
+                idx[1] in (0, output_final.shape[1]-1)):
+            warnings.warn("PatternFinder: Minimal value at border of ROI! "
+                          "This hints at a too small ROI. Actual minimum "
+                          "might be outside of the ROI.",
+                          PatternAtROIBorderWarning)
         return output_final, idx+roi[0:2], output_final[idx[0], idx[1]]
