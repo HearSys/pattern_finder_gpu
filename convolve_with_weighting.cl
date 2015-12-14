@@ -1,50 +1,74 @@
 
 kernel void convolve_image(__read_only image2d_t image,
-                           __read_only image2d_t target,
+                           __read_only image2d_t pattern,
                            __global __write_only float* output,
                            sampler_t sampler,
-                           const int2 top_left_rc,      // in image coords (row, column)
-                           const int image_start_r,  // where in the image row to start writing
+                           const int2 top_left_rc,   // image (row, column)
+                           const int image_start_r,  // where in the image row to start writing (for partitions)
                            const int image_end_r)    // end row writing (for partitions)
 {
-    // position (row, column) of the pixel in the output image
-    // note, that opencl has `.x` as the first member in the int2 struct!
+   // From a birds-eye-view what this kernel does is to compute a similarity
+   // measure almost like a convolve operation, but with a distance measure
+   // that uses the alpha channel of the pattern as a mask (to ignore or
+   // down-weight parts of the pattern) and further uses a squared distance
+   // measure. One call to this method computes a single pixel
+   // in the `output` image (`output` is our region-of-interest (ROI)). The
+   // output just contains float values (NOT in scale 0..1) for how similar
+   // pattern and image are at that pixel. Lower value mean "more similar".
+   // `top_left_rc` defines to which pixel coordinate the (0, 0) pixel in the
+   // output corresponds.
+
+    // Position (row, column) of the pixel in the output image.
+    // Note, that OpenCL has uses column-major ("fortran"-style) storage, so
+    // in the end we have to access the pixel data (through a sampler) in
+    // (column, row) order. But we stick to naming like "C"-style row-major
+    // ordering and just do the flip in the two nested for-loops in the loop
+    // variables c and r, which are then used according to OpenCL's convention.
     const int2 pos = {get_global_id(0), get_global_id(1)};
 
-    // The width and height of the target image
-    const int image_height = get_image_height(image);
+    // The width of the image
+    const int image_width = get_image_width(image);
 
-    // target should be at least 3x3 and have an odd width and height
-    const int target_half_w = (get_image_width(target)-1)/2;
-    const int target_half_h = (get_image_height(target)-1)/2;
+    // The pattern should be at least 3x3 and have an odd width and height
+    const int pattern_half_w = (get_image_width(pattern)-1) / 2;
+    const int pattern_half_h = (get_image_height(pattern)-1) / 2;
 
+    // 4-tuple of the RGBA values from the pattern image and RRB of the image.
+    float4 pattern_color = (float4)(0.0, 0.0, 0.0, 0.0);
+    float4 image_color = (float4)(0.0, 0.0, 0.0, 0.0);
 
-    // 4-tuple of the RGBA values from the target image
-    float4 t_value = (float4)(0.0, 0.0, 0.0, 0.0);
-
-    int2 image_pos = (int2)(0,0);
-    image_pos.s1 = top_left_rc.s0 + pos.s0 - target_half_h; // row
-    image_pos.s0 = top_left_rc.s1 + pos.s1 - target_half_w; // column
+    int2 pattern_pos = (int2)(0, 0);
+    pattern_pos.s1 = -top_left_rc.s0 - pos.s0 + pattern_half_h; // row
+    pattern_pos.s0 = -top_left_rc.s1 - pos.s1 + pattern_half_w; // column
 
     // value for the output pixel we are going to compute in this kernel
-    float value = 0.0f;
+    float value = 0.0;
+    // the distance in the color-space between the image and the pattern
+    float dist = 0.0f;
+    const float max_dist = 1.732050808f;
 
-    // Go though all pixel of the target image
-    for (int c = image_start_r; c < image_end_r; c++) {
+    // Go though all pixel of the pattern image
+    // Note, here c, r seem to be flipped, but that is because OpenCL uses
+    // Fortran order.
+    for (int r = image_start_r; r < image_end_r; r++) {
 
-        for (int r = 0; r < image_height; r++) {
+        for (int c = 0; c < image_width; c++) {
 
-            t_value = read_imagef(target, sampler, (int2)(c, r));
+            pattern_color = read_imagef(pattern, sampler, pattern_pos + (int2)(c, r));
 
-            if(t_value.w > 0.0) {
-                // Use the alpha value w from an RGBA image (target) as weight
-                // and compute the `distance` which is the absolute difference
-                value += (1-t_value.w) * 3 + t_value.w * distance(t_value.xyz,
-                                                                  read_imagef(image,
-                                                                              sampler,
-                                                                              image_pos + (int2)(c, r)).xyz);
+            if(pattern_color.w > 0.0f) {
+                // Use the alpha value `.w` from an RGBA image (pattern) as
+                // weight and compute the `distance` which is the squared
+                // absolute difference
+                image_color = read_imagef(image, sampler, (int2)(c, r));
+                dist = distance(pattern_color.xyz, image_color.xyz);
+                value += (1-pattern_color.w) * max_dist + pattern_color.w * dist;
             } else {
-                value += 3;
+                // Just add a constant that represents the maximal possible
+                // difference between image and pattern for a single pixel.
+                // E.g. from white (1,1,1) to black (0,0,0) has a squared
+                // Euclidean distance of 1.732050808.
+                value += max_dist;
             }
         }
     }
