@@ -1,6 +1,5 @@
 
 import sys
-import gc
 import pyopencl as cl
 import numpy as np
 import warnings
