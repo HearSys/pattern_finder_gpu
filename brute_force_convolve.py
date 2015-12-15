@@ -225,23 +225,27 @@ class PatternFinder():
 
         # partitions split the image in parts. We compute init the start row:
         image_start_row = 0
-        for part, out_gpu, out in zip(parts, outputs_gpu, outputs):
-            cl_op = self._opencl_prg.convolve_image(self.queue,
-                                                    output_final.shape,  # --> height, width -> {get_global_id(0), get_global_id(1)} in kernel
-                                                    None,  # no local workgroups
-                                                    image_gpu, target_gpu, out_gpu,
-                                                    self.sampler_gpu,
-                                                    np.array([roi[0], roi[1]], dtype=np.int32),  # start_row, start_col in image
-                                                    np.int32(image_start_row),
-                                                    np.int32(image_start_row + part))
-            # For the next round, we have to adapt the start column
-            # by the height of the current part
-            image_start_row += part
-            # Start to copy back already now (non-blocking)
-            cl.enqueue_copy(self.queue, out, out_gpu,
-                            wait_for=[cl_op], is_blocking=False)
+        # Context manager that automatically finishes the queue at the end
+        with self.queue as queue:
+            for part, out_gpu, out in zip(parts, outputs_gpu, outputs):
+                cl_op = self._opencl_prg.convolve_image(queue,
+                                                        output_final.shape,  # --> row, col == {get_global_id(0), get_global_id(1)} in kernel
+                                                        None,  # no local workgroups
+                                                        image_gpu, target_gpu, out_gpu,
+                                                        self.sampler_gpu,
+                                                        np.array([roi[0], roi[1]], dtype=np.int32),  # start_row, start_col in image
+                                                        np.int32(image_start_row),
+                                                        np.int32(image_start_row + part))
+                # For the next round, we have to adapt the start column
+                # by the height of the current part
+                image_start_row += part
+                # Start to copy back right after convolve finished (non-blocking)
+                cl.enqueue_copy(queue, out, out_gpu,
+                                wait_for=[cl_op], is_blocking=False)
+
         assert image_start_row == image_gpu.shape[1], ("${}".format(image_gpu.height, image_gpu.height, image_start_row))
-        self.queue.finish()
+
+        # Add all the outputs together
         for i in range(partitions):
             output_final += outputs[i]
 
