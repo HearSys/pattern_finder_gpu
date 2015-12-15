@@ -156,21 +156,23 @@ class PatternFinder():
                        for out in outputs]
 
         image_start_row = 0
-        for part, out_gpu in zip(parts, outputs_gpu):
-            self._opencl_prg.convolve_image(self.queue,
-                                            output_final.shape,  # --> height, width -> {get_global_id(0), get_global_id(1)} in kernel
-                                            None,  # no local workgroups
-                                            image_gpu, target_gpu, out_gpu,
-                                            self.sampler_gpu,
-                                            np.array([roi[0], roi[1]], dtype=np.int32),  # start_row, start_col in image
-                                            np.int32(image_start_row),
-                                            np.int32(image_start_row+part))
+        for part, out_gpu, out in zip(parts, outputs_gpu, outputs):
+            opencl_operation = self._opencl_prg.convolve_image(self.queue,
+                                                               output_final.shape,  # --> height, width -> {get_global_id(0), get_global_id(1)} in kernel
+                                                               None,  # no local workgroups
+                                                               image_gpu, target_gpu, out_gpu,
+                                                               self.sampler_gpu,
+                                                               np.array([roi[0], roi[1]], dtype=np.int32),  # start_row, start_col in image
+                                                               np.int32(image_start_row),
+                                                               np.int32(image_start_row+part))
             # For the next round, we have to adapt the start column
             # by the height of the current part
             image_start_row += part
-        assert image_start_row == image_gpu.shape[1], "${}".format(image_gpu.height, image_gpu.height, image_start_row)
-        for i in range(partitions):
-            cl.enqueue_copy(self.queue, outputs[i], outputs_gpu[i])
+            # Start to copy back already now (non-blocking)
+            cl.enqueue_copy(self.queue, out, out_gpu,
+                            wait_for=[opencl_operation], is_blocking=False)
+        assert image_start_row == image_gpu.shape[1], (
+               "${}".format(image_gpu.height, image_gpu.height, image_start_row))
         self.queue.finish()
         for i in range(partitions):
             output_final += outputs[i]
