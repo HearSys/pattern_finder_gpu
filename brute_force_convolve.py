@@ -29,13 +29,13 @@ def idx_array_split(length, n_parts):
     parts = []
     Neach_section, extras = divmod(length, n_parts)
     section_sizes = ([0] +
-                     extras * [Neach_section+1] +
-                     (n_parts-extras) * [Neach_section])
+                     extras * [Neach_section + 1] +
+                     (n_parts - extras) * [Neach_section])
     div_points = np.array(section_sizes).cumsum()
     for i in range(n_parts):
         st = div_points[i]
         end = div_points[i + 1]
-        parts.append(end-st)
+        parts.append(end - st)
     return parts
 
 
@@ -50,8 +50,8 @@ class PatternFinder():
         if opencl_queue is None:
             # In my observation the last device in the last platform (which is mostly just one)
             # is the powerful GPU
-            self.ctx = cl.Context([cl.get_platforms()[-1].get_devices()[-1]])
-            self.queue = cl.CommandQueue(self.ctx)#, properties=cl.command_queue_properties.PROFILING_ENABLE)
+            self.ctx = cl.Context([cl.get_platforms()[-1].get_devices()[-1]])  # , properties=cl.command_queue_properties.PROFILING_ENABLE)
+            self.queue = cl.CommandQueue(self.ctx)
             print(self.ctx)
         else:
             self.ctx = opencl_queue.context
@@ -63,9 +63,9 @@ class PatternFinder():
 
         # The Sampler for how OpenCL accesses the images (pixel coordinates, no interpolation)
         self.sampler_gpu = cl.Sampler(self.ctx,
-                                 False,
-                                 cl.addressing_mode.CLAMP_TO_EDGE,
-                                 cl.filter_mode.NEAREST)
+                                      False,
+                                      cl.addressing_mode.CLAMP_TO_EDGE,
+                                      cl.filter_mode.NEAREST)
 
         # Read-in and compile the OpenCL Kernel-Program
         with open(CONVOLVE_WITH_WEIGHTING_CL_KERNEL_FILENAME, 'r') as f:
@@ -157,22 +157,21 @@ class PatternFinder():
 
         image_start_row = 0
         for part, out_gpu, out in zip(parts, outputs_gpu, outputs):
-            opencl_operation = self._opencl_prg.convolve_image(self.queue,
-                                                               output_final.shape,  # --> height, width -> {get_global_id(0), get_global_id(1)} in kernel
-                                                               None,  # no local workgroups
-                                                               image_gpu, target_gpu, out_gpu,
-                                                               self.sampler_gpu,
-                                                               np.array([roi[0], roi[1]], dtype=np.int32),  # start_row, start_col in image
-                                                               np.int32(image_start_row),
-                                                               np.int32(image_start_row+part))
+            cl_op = self._opencl_prg.convolve_image(self.queue,
+                                                    output_final.shape,  # --> height, width -> {get_global_id(0), get_global_id(1)} in kernel
+                                                    None,  # no local workgroups
+                                                    image_gpu, target_gpu, out_gpu,
+                                                    self.sampler_gpu,
+                                                    np.array([roi[0], roi[1]], dtype=np.int32),  # start_row, start_col in image
+                                                    np.int32(image_start_row),
+                                                    np.int32(image_start_row + part))
             # For the next round, we have to adapt the start column
             # by the height of the current part
             image_start_row += part
             # Start to copy back already now (non-blocking)
             cl.enqueue_copy(self.queue, out, out_gpu,
-                            wait_for=[opencl_operation], is_blocking=False)
-        assert image_start_row == image_gpu.shape[1], (
-               "${}".format(image_gpu.height, image_gpu.height, image_start_row))
+                            wait_for=[cl_op], is_blocking=False)
+        assert image_start_row == image_gpu.shape[1], ("${}".format(image_gpu.height, image_gpu.height, image_start_row))
         self.queue.finish()
         for i in range(partitions):
             output_final += outputs[i]
@@ -181,10 +180,9 @@ class PatternFinder():
         self.queue.flush()
         gc.collect()
         idx = np.array(np.unravel_index(output_final.argmin(), output_final.shape))
-        if (idx[0] in (0, output_final.shape[0]-1) or
-                idx[1] in (0, output_final.shape[1]-1)):
+        if (idx[0] in (0, output_final.shape[0] - 1) or idx[1] in (0, output_final.shape[1] - 1)):
             warnings.warn("PatternFinder: Minimal value at border of ROI! "
                           "This hints at a too small ROI. Actual minimum "
                           "might be outside of the ROI.",
                           PatternAtROIBorderWarning)
-        return output_final, idx+roi[0:2], output_final[idx[0], idx[1]]
+        return output_final, idx + roi[0:2], output_final[idx[0], idx[1]]
