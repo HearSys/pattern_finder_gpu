@@ -149,11 +149,15 @@ class PatternFinder():
 
         self._target_gpu = self._upload_image(pattern)
 
+    property(fset=set_pattern, doc=set_pattern.__doc__)
+
     def set_image(self, image):
         """
         Assign and upload an image to the GPU for the find method.
         """
         self._image_gpu = self._upload_image(image)
+
+    property(fset=set_image, doc=set_image.__doc__)
 
     def find(self, pattern=None, image=None, roi=None):
         """
