@@ -1,10 +1,4 @@
 
-# Below is the Kernel which is uploaded and to does all the computations on
-# the GPU. It is written in openCL language. Also see:
-
-
-# https://www.khronos.org/files/opencl-1-2-quick-reference-card.pdf
-
 import sys
 import gc
 import pyopencl as cl
@@ -26,6 +20,12 @@ class PatternAtROIBorderWarning(UserWarning):
 
 
 def idx_array_split(length, n_parts):
+    """
+    Helper that splits the number `length` into `n_parts` and returns a list
+    of indices that can be used to index an array dimension of `length`.
+
+    Similar (adapted from) numpy.split_array.
+    """
     parts = []
     Neach_section, extras = divmod(length, n_parts)
     section_sizes = ([0] +
@@ -44,12 +44,38 @@ class PatternFinder():
     """Find a given pattern in an image (OpenCL accelerated implementation)"""
 
     def __init__(self, opencl_queue=None, partitions=1):
+        """
+        Create a new PatternFinder object.
+
+        Optionally providing an OpenCL command queue and partitions to limit
+        the size one signle kernel has to compute.
+
+        -   `opencl_queue`: The command queue will default to the last platform
+             and the last device. Usually that is the GPU.
+             You can assign this your self
+
+                 import pyopencl as cl
+                 platform = cl.get_platforms()[i]
+                 device = platform.get_devices[j]
+                 queue = cl.CommandQueue(cl.Context([device]))  # , properties=cl.command_queue_properties.PROFILING_ENABLE)
+
+        -   `partitions`: Split the image in this many parts (default=1) in
+            order to keep the kernel runtime shorter for buggy nVidia-Windows
+            driver. Usually, there is no speed-up when using more partitions
+            for large ROIs as the GPU is alreay fully busy because each pixel
+            in the ROI is computed in parallel. However, if you have fewer
+            pixels in your ROI than the GPU can handle parallel executions,
+            theoretically you might gain a small speed-up with higher
+            `partitions` number
+            If you experience GPU driver crashes, try to set this number
+            higher, e.g. 10 is a goog guess.
+        """
         self.partitions = partitions
         assert partitions >= 1, "partitions must be >= 1"
         # Create an OpenCL context and queue, if None was given
         if opencl_queue is None:
-            # In my observation the last device in the last platform (which is mostly just one)
-            # is the powerful GPU
+            # In my observation the last device in the last platform
+            # (which is mostly just one) is the powerful GPU
             self.ctx = cl.Context([cl.get_platforms()[-1].get_devices()[-1]])  # , properties=cl.command_queue_properties.PROFILING_ENABLE)
             self.queue = cl.CommandQueue(self.ctx)
             print(self.ctx)
@@ -59,7 +85,6 @@ class PatternFinder():
 
         if not self.queue.device.get_info(cl.device_info.IMAGE_SUPPORT):
             raise Exception("OpenCL device {} does not support image".format(self.ctx.device))
-
 
         # The Sampler for how OpenCL accesses the images (pixel coordinates, no interpolation)
         self.sampler_gpu = cl.Sampler(self.ctx,
@@ -124,6 +149,38 @@ class PatternFinder():
         self._image_gpu = self._upload_image(image)
 
     def find(self, pattern=None, image=None, roi=None):
+        """
+        Find the position where `pattern` is most likely in `image` in the ROI.
+
+        This is a GPU implemented (OpenCL) brute force (global) search.
+
+        You can vastly improve the runtime by providing a region-of-interest
+        (ROI) in image coordinates where to look for the pattern.
+
+        The position of the *center* of the pattern is returned and *NOT* the
+        top-left corner. This is helpful is your pattern is centered.
+
+        If you need to call this method multiple times, it might be advied to
+        set the `pattern` and/or the `image` before
+
+        -   `pattern`: A numpy 2d image with a shape (columns, rows, 4) where
+            the last color band is the alpha channel (0.0 is transparent).
+            Optional, if the property `.pattern` has been set.
+        -   `image`: A numpy 2d image with a shape (columns, rows, 3).
+            Optional, if the property `.image` has been set.
+        -   `roi`: Optional region-of-interest in zero-based image coordinates.
+             This is a fourh-tuple `(start_row, start_col, row_end, col_end)`
+             where the start row/cols are included but row/col_end are
+             excluded.
+
+        Warns, if the minimum is at the border of the ROI as that hints to the
+        true minimum being outside of the ROI.
+
+        Returns a three-tuple of the convoluted ROI, the coordinates in the
+        image coordinate system and the minimal value at the minimum.
+
+        """
+        time_start = time.time()
 
         if image is not None:
             self.set_image(image)
@@ -155,6 +212,7 @@ class PatternFinder():
         outputs_gpu = [cl.Buffer(self.ctx, cl.mem_flags.WRITE_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=out)
                        for out in outputs]
 
+        # partitions split the image in parts. We compute init the start row:
         image_start_row = 0
         for part, out_gpu, out in zip(parts, outputs_gpu, outputs):
             cl_op = self._opencl_prg.convolve_image(self.queue,
