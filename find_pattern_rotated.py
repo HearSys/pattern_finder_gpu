@@ -110,6 +110,8 @@ def find_pattern_rotated(PF, pattern, image, rescale=0.2, rotate=(-60,61,120),
     else:
         print("Rotation is kept constant at {0}°".format(rotate[0]))
     
+    PF.set_image(image_scaled)
+
     for r in rotations:
         for ea in ellipseangles:
             for ec in ellipsecorrs:
@@ -117,7 +119,7 @@ def find_pattern_rotated(PF, pattern, image, rescale=0.2, rotate=(-60,61,120),
                 center = sp.array((rows, cols))/2. - 0.5
                 #ellipse_matrix = transform.AffineTransform(matrix=scale_matrix(ec,ea,center))
                 rotation_matrix = rotation_transform_center(pattern_scaled,r,center_xy=center)
-                out, min_coords, value = PF.find(transform.warp(pattern_scaled,rotation_matrix), image_scaled, roi)
+                out, min_coords, value = PF.find(transform.warp(pattern_scaled,rotation_matrix), image=None, roi=roi)
                 outmax = out.max()
                 outmin = out.min()
                 if outmax > vmax:
