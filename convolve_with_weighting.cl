@@ -53,7 +53,7 @@ kernel void convolve_image(__read_only image2d_t image,
     float value = 0.0;
     // the distance in the color-space between the image and the pattern
     float dist = 0.0f;
-    const float max_dist = distance(1+1+1);
+    const float max_dist = sqrt(3.0);
 
     // Go though all pixel of the pattern image
     for (int r = image_start_r; r < image_end_r; r++) {
