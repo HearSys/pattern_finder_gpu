@@ -135,7 +135,8 @@ class PatternFinder():
             image_gpu = self._image_gpu
             target_gpu = self._target_gpu
         except AttributeError:
-            raise Exception("No image or pattern available. Forgot to provide these or call set_image/set_pattern before?")
+            raise Exception("No image or pattern available. "
+                            "Forgot to provide these or call set_image/set_pattern before?")
 
         # Compute the Region Of Interest if not given
         # (row_start, col_start, row_end, col_end)
