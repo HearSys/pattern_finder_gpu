@@ -1,4 +1,8 @@
 
+// OpenCL Kernel
+// https://www.khronos.org/files/opencl-1-2-quick-reference-card.pdf
+
+
 kernel void convolve_image(__read_only image2d_t image,
                            __read_only image2d_t pattern,
                            __global __write_only float* output,
@@ -37,24 +41,26 @@ kernel void convolve_image(__read_only image2d_t image,
     float4 pattern_color = (float4)(0.0, 0.0, 0.0, 0.0);
     float4 image_color = (float4)(0.0, 0.0, 0.0, 0.0);
 
-    int2 pattern_pos = (int2)(0, 0);
-    pattern_pos.s1 = -top_left_rc.s0 - pos.s0 + pattern_half_h; // row
-    pattern_pos.s0 = -top_left_rc.s1 - pos.s1 + pattern_half_w; // column
+    // The (column, row) of the center pixel in the pattern is computed
+    // Note, that later one we use this as (column, row), therefore we switch
+    // already here the .s0 and .s1 assignment
+    // (s0 is the first entry, s1 second)
+    int2 pattern_pos_cr = (int2)(0, 0);
+    pattern_pos_cr.s1 = -top_left_rc.s0 - pos.s0 + pattern_half_h; // row
+    pattern_pos_cr.s0 = -top_left_rc.s1 - pos.s1 + pattern_half_w; // column
 
     // value for the output pixel we are going to compute in this kernel
     float value = 0.0;
     // the distance in the color-space between the image and the pattern
     float dist = 0.0f;
-    const float max_dist = 1.732050808f;
+    const float max_dist = distance(1+1+1);
 
     // Go though all pixel of the pattern image
-    // Note, here c, r seem to be flipped, but that is because OpenCL uses
-    // Fortran order.
     for (int r = image_start_r; r < image_end_r; r++) {
 
         for (int c = 0; c < image_width; c++) {
 
-            pattern_color = read_imagef(pattern, sampler, pattern_pos + (int2)(c, r));
+            pattern_color = read_imagef(pattern, sampler, pattern_pos_cr + (int2)(c, r));
 
             if(pattern_color.w > 0.0f) {
                 // Use the alpha value `.w` from an RGBA image (pattern) as
@@ -66,8 +72,7 @@ kernel void convolve_image(__read_only image2d_t image,
             } else {
                 // Just add a constant that represents the maximal possible
                 // difference between image and pattern for a single pixel.
-                // E.g. from white (1,1,1) to black (0,0,0) has a squared
-                // Euclidean distance of 1.732050808.
+                // E.g. from white (1,1,1) to black (0,0,0).
                 value += max_dist;
             }
         }
