@@ -5,6 +5,9 @@ import pyopencl as cl
 import numpy as np
 import warnings
 import os
+import logging
+import time
+
 
 # Filename containing the src of the kernel
 CONVOLVE_WITH_WEIGHTING_CL_KERNEL_FILENAME = os.path.dirname(__file__) + "/convolve_with_weighting.cl"
@@ -70,15 +73,19 @@ class PatternFinder():
             If you experience GPU driver crashes, try to set this number
             higher, e.g. 10 is a goog guess.
         """
+        self.logger = logging.getLogger("PatternFinder")
+        self.logger.level = logging.DEBUG
+
         self.partitions = partitions
         assert partitions >= 1, "partitions must be >= 1"
+
         # Create an OpenCL context and queue, if None was given
         if opencl_queue is None:
             # In my observation the last device in the last platform
             # (which is mostly just one) is the powerful GPU
             self.ctx = cl.Context([cl.get_platforms()[-1].get_devices()[-1]])  # , properties=cl.command_queue_properties.PROFILING_ENABLE)
             self.queue = cl.CommandQueue(self.ctx)
-            print(self.ctx)
+            self.logger.info(self.ctx)
         else:
             self.ctx = opencl_queue.context
             self.queue = opencl_queue
@@ -243,4 +250,7 @@ class PatternFinder():
                           "This hints at a too small ROI. Actual minimum "
                           "might be outside of the ROI.",
                           PatternAtROIBorderWarning)
+
+        self.logger.debug("Execution PatternFinder.find took %f ms",
+                          (time.time()-time_start) / 1000)
         return output_final, idx + roi[0:2], output_final[idx[0], idx[1]]
