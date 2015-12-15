@@ -58,7 +58,7 @@ class PatternFinder():
             self.queue = opencl_queue
 
         if not self.queue.device.get_info(cl.device_info.IMAGE_SUPPORT):
-            raise Exception("OpenCL device {} does not support image".format(ctx.device))
+            raise Exception("OpenCL device {} does not support image".format(self.ctx.device))
 
 
         # The Sampler for how OpenCL accesses the images (pixel coordinates, no interpolation)
