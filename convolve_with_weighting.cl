@@ -67,7 +67,7 @@ kernel void convolve_image(__read_only image2d_t image,
                 // weight and compute the `distance` which is the squared
                 // absolute difference
                 image_color = read_imagef(image, sampler, (int2)(c, r));
-                dist = distance(pattern_color.xyz, image_color.xyz);
+                dist = fast_distance(pattern_color.xyz, image_color.xyz);
                 value += (1-pattern_color.w) * max_dist + pattern_color.w * dist;
             } else {
                 // Just add a constant that represents the maximal possible
