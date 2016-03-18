@@ -61,9 +61,9 @@ def rotation_transform_center(image, angle, center_xy=None):
         cols, rows = image.shape[:2]
         center_xy = sp.array((rows, cols)) / 2. - 0.5
     #Calculate transformation matrices 
-    tform1 = transform.SimilarityTransform(translation=-center_xy)
-    tform2 = transform.SimilarityTransform(rotation=sp.deg2rad(angle))
-    tform3 = transform.SimilarityTransform(translation=center_xy)
+    tform1 = transform.AffineTransform(translation=-center_xy)
+    tform2 = transform.AffineTransform(rotation=sp.deg2rad(angle))
+    tform3 = transform.AffineTransform(translation=center_xy)
     #Return transformation matrix
     return tform1 + tform2 + tform3
 
