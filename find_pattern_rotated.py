@@ -5,6 +5,7 @@
 import warnings
 import time
 from skimage import img_as_float, io, transform
+
 # Plotting
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -72,92 +73,89 @@ def find_pattern_rotated(PF, pattern, image, rescale=0.2, rotate=(-60,61,120),
                          roi_center=None,
                          roi_size=(41,41),
                          plot=False):
+    #Get current time to determine runtime of search
     start_time = time.time()
-    print("find_pattern_rotated:")
+
+    #Initialize values needed later on
+    result = []
+    vmax = 0.0
+    vmin = sp.Inf
+    
+    #Set region of interest
+    if roi_center is None:
+        roi_center = sp.array(im.shape[:2])/2.0 - 0.5
+    roi = center_roi_around(roi_center*rescale, roi_size)
+    
+    #Give user some feedback on what is happening
     print("Rescaling image and target by scale={rescale}.\n"
           "   image {0}x{1} px to {2:.2f}x{3:.02f} px."
           .format(image.shape[0], image.shape[1],
                   image.shape[0]*rescale, image.shape[1]*rescale, rescale=rescale), flush=True)
-    pattern_scaled = transform.rescale(pattern, rescale)
-    image_scaled = transform.rescale(image, rescale)
-
-    if len(sp.linspace(*rotate))>1 and rescale<0.3:
-        #remove zero values in low rescale values because they may end up in false local minima
-        rotations = sp.linspace(*rotate)
-        rotations = rotations[~sp.isclose(rotations,0,atol=0.2)]
-        print("Rotation values close to zero were removed in low res rescale")
-    else:       
-        rotations = sp.linspace(*rotate)
-    ellipseangles   = sp.linspace(0,180,ellipseres)
-    ellipsecorrs  = sp.linspace(*ellipsecorr )
     
-    result = []
-    vmax = 0.0
-    vmin = sp.Inf
-    if roi_center is None:
-        roi_center = sp.array(im.shape[:2])/2.0 - 0.5
-    roi = center_roi_around(roi_center*rescale, roi_size)
     print("ROI: center={0}, {1}, in unscaled image.\n"
           "     height={2}, width={3} in scaled image"
           .format(roi_center[0], roi_center[1], roi_size[0], roi_size[1]))
-    if ellipsecorr[2]>1:
-        print("Now correlating ellipse correction from {0}x to {1}x in {2} steps at an"
-              .format(*ellipsecorr)+" Angular resolution {}º".format(180/ellipseres))
-    #TODO: correct number for eliminated values which are close to zero in low resolution pics
+
     if rotate[2]>1:
         print("Now correlating rotations from {0}º to {1}º in {2} steps:"
               .format(*rotate))
     else:
         print("Rotation is kept constant at {0}°".format(rotate[0]))
     
+    # Create rescaled copies of image and pattern, determine center coordinates of both
+    pattern_scaled = transform.rescale(pattern, rescale)
+    image_scaled = transform.rescale(image, rescale)
     PF.set_image(image_scaled)
-
+    cols_scaled, rows_scaled = pattern_scaled.shape[:2]
+    pattern_scaled_center = sp.array((rows_scaled, cols_scaled))/2. - 0.5
+    cols, rows = pattern.shape[:2]
+    pattern_center = sp.array((rows, cols))/2. - 0.5 
+  
+    # Launch PatternFinder for all rotations defined in function input
+    rotations = sp.linspace(*rotate)
     for r in rotations:
-        for ea in ellipseangles:
-            for ec in ellipsecorrs:
-                cols, rows = pattern_scaled.shape[:2]
-                center = sp.array((rows, cols))/2. - 0.5
-                #ellipse_matrix = transform.AffineTransform(matrix=scale_matrix(ec,ea,center))
-                rotation_matrix = rotation_transform_center(pattern_scaled,r,center_xy=center)
-                out, min_coords, value = PF.find(transform.warp(pattern_scaled,rotation_matrix), image=None, roi=roi)
-                outmax = out.max()
-                outmin = out.min()
-                if outmax > vmax:
-                    vmax = outmax
-                if outmin < vmin:
-                    vmin = outmin
-                # undo the rescale for the coordinates
-                min_coords = min_coords.astype(sp.float64) / rescale
-                result.append([r, ea, ec, min_coords, value, out])
-                print(".",end="", flush=True)
+        # Calculate transformation matrix for rotation around center of scaled pattern
+        rotation_matrix = rotation_transform_center(pattern_scaled,r,center_xy=pattern_scaled_center)
+        # Launch Patternfinder
+        out, min_coords, value = PF.find(transform.warp(pattern_scaled,rotation_matrix), image=None, roi=roi)
+        # Collect Min and Max values for plotting later on
+        outmax = out.max()
+        outmin = out.min()
+        if outmax > vmax:
+            vmax = outmax
+        if outmin < vmin:
+            vmin = outmin
+        # undo the rescale for the coordinates
+        min_coords = min_coords.astype(sp.float64) / rescale
+        # create a list of results for all rotations
+        result.append([r, min_coords, value, out])
+        # Progress bar... kind of :)
+        print(".",end="", flush=True)
     print("")
-    best_param_set = result[sp.argmin([r[4] for r in result])]
-    print("best_degree= {}°".format(best_param_set[0]))
-    print("best_ellipseangle= {}".format(best_param_set[1]))
-    print("best_ellipsecorr= {}".format(best_param_set[2]))
-    print("coordinates= {}".format(best_param_set[3]))
-    print("minimum value= {}".format(best_param_set[4]))
     print("took {0} seconds.".format(time.time()-start_time))
     
-    if bool(plot) and rotate[2] > 1 and ellipsecorr[2] > 1:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.surface_plot([a[0] for a in result],[a[2] for a in result],[a[4] for a in result])
-        plt.show()
+    #Select the best result from the result list and extract its parameters
+    best_param_set = result[sp.argmin([r[2] for r in result])]
+    best_angle = best_param_set[0]  # The rotation angle is the 0-th element in result
+    best_coord = best_param_set[1]  # The coordinates are in the 2-nd element
+    best_value = best_param_set[2]  # The actual value is the 3-rd element
     
-    elif bool(plot) and rotate[2] > 1:
+    # Calculate transformation to transform image onto pattern
+    move_to_center = transform.AffineTransform(translation=-(best_coord)[::-1])
+    move_back = transform.AffineTransform(translation=(best_coord[::-1]))
+    rotation = transform.AffineTransform(rotation=-sp.deg2rad(best_angle))
+    translation = transform.AffineTransform(translation=sp.asmatrix((best_coord-pattern_center)[::-1]))
+    T = translation + move_to_center + rotation + move_back
+      
+    #Create a plot showing error over angle
+    if plot and rotate[2] > 1:
         fig, ax = plt.subplots(1)
-        ax.plot([a[0] for a in result], [a[4] for a in result])
+        ax.plot([a[0] for a in result], [a[2] for a in result])
         ax.set_xlabel('Angle (rotation)')
         ax.set_ylabel('difference image-target')
         plt.show()
     
-    elif bool (plot) and ellipsecorr[2] > 1:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter([a[2] for a in result],[a[1] for a in result],[a[4] for a in result])
-        plt.show()
-        
+    #Create heat plot of where target is in image
     if plot == 'all':
         n_rows = int(sp.sqrt(len(result)))
         n_cols = int(sp.ceil(len(result)/n_rows))
@@ -169,10 +167,10 @@ def find_pattern_rotated(PF, pattern, image, rescale=0.2, rotate=(-60,61,120),
             for j in range(n_cols):
                 ax[i,j].axis("off")
                 if n < len(result):
-                    ax[i,j].imshow(result[n][5], interpolation="nearest", cmap='cubehelix', vmin=vmin, vmax=vmax)
-                    ax[i,j].annotate('A:{0:.2f};EA:{1:.2f};ES{2:.3f}'
-                                     .format(result[n][0],result[n][1],result[n][2]),[0,0])
-                    ax[i,j].annotate('Value:{0:.2f}'.format(result[n][4]), [0,5])
+                    ax[i,j].imshow(result[n][3], interpolation="nearest", cmap='cubehelix', vmin=vmin, vmax=vmax)
+                    ax[i,j].annotate('Angle:{0:.2f}; Value:{1:.2f}'
+                                     .format(result[n][0],result[n][2]),[0,0])
                 n += 1
         plt.show()
-    return result
+        
+    return T, best_value
