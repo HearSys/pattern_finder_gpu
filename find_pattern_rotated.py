@@ -5,7 +5,6 @@
 import warnings
 import time
 from skimage import img_as_float, io, transform
-
 # Plotting
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -68,11 +67,9 @@ def rotation_transform_center(image, angle, center_xy=None):
     #Return transformation matrix
     return tform1 + tform2 + tform3
 
-def find_pattern_rotated(PF, pattern, image, rescale=0.2, rotate=(-60,61,120),
-                         ellipsecorr=(1,1,1), ellipseres=1,
-                         roi_center=None,
-                         roi_size=(41,41),
-                         plot=False):
+def find_pattern_rotated(PF, pattern, image, rescale = 1.0, rotate=(-60,61,120),
+                         roi_center=None, roi_size=(41,41), plot=False):
+    
     #Get current time to determine runtime of search
     start_time = time.time()
 
