@@ -64,13 +64,13 @@ class PatternFinder():
         -   `partitions`: Split the image in this many parts (default=1) in
             order to keep the kernel runtime shorter for buggy nVidia-Windows
             driver. Usually, there is no speed-up when using more partitions
-            for large ROIs as the GPU is alreay fully busy because each pixel
+            for large ROIs as the GPU is already fully busy because each pixel
             in the ROI is computed in parallel. However, if you have fewer
             pixels in your ROI than the GPU can handle parallel executions,
             theoretically you might gain a small speed-up with higher
             `partitions` number
             If you experience GPU driver crashes, try to set this number
-            higher, e.g. 10 is a goog guess.
+            higher, e.g. 10 is a good guess.
         """
         self.logger = logging.getLogger("PatternFinder")
         self.logger.level = logging.DEBUG
