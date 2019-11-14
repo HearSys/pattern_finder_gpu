@@ -129,6 +129,7 @@ class PatternFinder():
                 image = np.ones((tmp.shape[0], tmp.shape[1], 4))
                 num_channels = 4
                 image[:, :, :3] = tmp[:]
+                self.logger.info("nvidia Hack for RGB images adding empty A channel on device " + str(self.ctx.devices[0]))
             else:
                 num_channels = image.shape[2]
 
