@@ -1,3 +1,6 @@
+'''
+The python file uses pyopencl to do the compute intense weighted and masked convolve op.
+'''
 
 import sys
 import pyopencl as cl
@@ -8,7 +11,7 @@ import logging
 import time
 
 
-# Filename containing the src of the kernel
+# Filename containing the src of the OpenCL kernel
 CONVOLVE_WITH_WEIGHTING_CL_KERNEL_FILENAME = os.path.dirname(__file__) + "/convolve_with_weighting.cl"
 
 
@@ -29,10 +32,10 @@ def idx_array_split(length, n_parts):
     Similar (adapted from) numpy.split_array.
     """
     parts = []
-    Neach_section, extras = divmod(length, n_parts)
+    n_each_section, extras = divmod(length, n_parts)
     section_sizes = ([0] +
-                     extras * [Neach_section + 1] +
-                     (n_parts - extras) * [Neach_section])
+                     extras * [n_each_section + 1] +
+                     (n_parts - extras) * [n_each_section])
     div_points = np.array(section_sizes).cumsum()
     for i in range(n_parts):
         st = div_points[i]
@@ -140,13 +143,14 @@ class PatternFinder():
         """
         # Check that pattern is an RGBA image
         assert pattern.ndim == 3 and pattern.shape[2] == 4, "pattern has to be a 4-channel RGBA image."
+        assert pattern.max() <= 1.0
 
         if pattern.shape[0] % 2 == 0 or pattern.shape[1] % 2 == 0:
             warnings.warn("For best results, pattern should have an odd "
                           "number of columns/rows but its shape is: {}".format(pattern.shape),
                           stacklevel=2)
 
-        self._target_gpu = self._upload_image(pattern)
+        self._pattern_gpu = self._upload_image(pattern)
 
     property(fset=set_pattern, doc=set_pattern.__doc__)
 
@@ -168,16 +172,18 @@ class PatternFinder():
         (ROI) in image coordinates where to look for the pattern.
 
         The position of the *center* of the pattern is returned and *NOT* the
-        top-left corner. This is helpful is your pattern is centered.
+        top-left corner. This is helpful if your pattern is centered.
 
         If you need to call this method multiple times, it might be advied to
-        set the `pattern` and/or the `image` before
+        set the `pattern` and/or the `image` before with `set_image`/`set_pattern`.
 
         -   `pattern`: A numpy 2d image with a shape (columns, rows, 4) where
             the last color band is the alpha channel (0.0 is transparent).
             Optional, if the property `.pattern` has been set.
+
         -   `image`: A numpy 2d image with a shape (columns, rows, 3).
             Optional, if the property `.image` has been set.
+
         -   `roi`: Optional region-of-interest in zero-based image coordinates.
              This is a fourh-tuple `(start_row, start_col, row_end, col_end)`
              where the start row/cols are included but row/col_end are
@@ -200,7 +206,7 @@ class PatternFinder():
 
         try:
             image_gpu = self._image_gpu
-            target_gpu = self._target_gpu
+            pattern_gpu = self._pattern_gpu
         except AttributeError:
             raise Exception("No image or pattern available. "
                             "Forgot to provide these or call set_image/set_pattern before?")
@@ -211,9 +217,9 @@ class PatternFinder():
         if roi is None:
             roi = (0, 0, image_gpu.shape[1], image_gpu.shape[0])
 
-        partitions = min(image_gpu.shape[1], self.partitions)
+        partitions = min(pattern_gpu.shape[1], self.partitions)
         # split the image into self.partitions parts but not more than rows in the image
-        parts = idx_array_split(length=image_gpu.shape[1], n_parts=partitions)
+        parts = idx_array_split(length=pattern_gpu.shape[1], n_parts=partitions)
 
         output_final = np.zeros((roi[2]-roi[0], roi[3]-roi[1]), dtype=np.float32)
 
@@ -222,27 +228,27 @@ class PatternFinder():
         outputs_gpu = [cl.Buffer(self.ctx, cl.mem_flags.WRITE_ONLY | cl.mem_flags.COPY_HOST_PTR, hostbuf=out)
                        for out in outputs]
 
-        # partitions split the image in parts. We compute init the start row:
-        image_start_row = 0
+        # partitions split the pattern in parts. We compute init the start row:
+        pattern_start_row = 0
         # Context manager that automatically finishes the queue at the end
         with self.queue as queue:
             for part, out_gpu, out in zip(parts, outputs_gpu, outputs):
                 cl_op = self._opencl_prg.convolve_image(queue,
                                                         output_final.shape,  # --> row, col == {get_global_id(0), get_global_id(1)} in kernel
                                                         None,  # no local workgroups
-                                                        image_gpu, target_gpu, out_gpu,
+                                                        image_gpu, pattern_gpu, out_gpu,
                                                         self.sampler_gpu,
                                                         np.array([roi[0], roi[1]], dtype=np.int32),  # start_row, start_col in image
-                                                        np.int32(image_start_row),
-                                                        np.int32(image_start_row + part))
+                                                        np.int32(pattern_start_row),
+                                                        np.int32(pattern_start_row + part))
                 # For the next round, we have to adapt the start column
                 # by the height of the current part
-                image_start_row += part
+                pattern_start_row += part
                 # Start to copy back right after convolve finished (non-blocking)
                 cl.enqueue_copy(queue, out, out_gpu,
                                 wait_for=[cl_op], is_blocking=False)
 
-        assert image_start_row == image_gpu.shape[1], ("${}".format(image_gpu.height, image_gpu.height, image_start_row))
+        assert pattern_start_row == pattern_gpu.shape[1], ("${}".format(pattern_gpu.height, pattern_gpu.height, pattern_start_row))
 
         # Add all the outputs together
         for i in range(partitions):
