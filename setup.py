@@ -8,5 +8,5 @@ setup(name='pattern_finder_gpu',
       author_email='john.samuel@hoersys.de',
       license='MIT',
       packages=['pattern_finder_gpu'],
-      install_requires=['pyopencl', 'numpy', 'scipy', 'matplotlib', 'skimage'],
+      install_requires=['pyopencl', 'numpy', 'scipy', 'matplotlib', 'scikit-image'],
       zip_safe=False)
