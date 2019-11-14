@@ -1,13 +1,13 @@
-
+from pathlib import Path
 import numpy as np
 import warnings
 
 
 import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + os.sep + os.pardir)
+sys.path.insert(0, str(Path(__file__).parent.parent))
 print(sys.path[0])
-from find_pattern_rotated import center_roi_around
+from pattern_finder_gpu import center_roi_around, find_pattern_rotated, rotation_around
+
 
 
 def test_center_roi_around():
@@ -37,6 +37,19 @@ def test_warnings_for_even_roi_height_width():
         center_roi_around((10, 10), (h, w))
         center_roi_around((10, 10), (h, w))
         # Verify some things
-        assert len(ws) == 1, "This warning should only be rased once"
+        assert len(ws) == 1, "This warning should only be raised once"
         assert issubclass(ws[-1].category, UserWarning)
         assert "(height, width)=({height}, {width})".format(height=h, width=w) in str(ws[-1].message)
+
+
+def test_rotation_around():
+    """The rotation matrix should contain the angle and it should be independet"""
+    degs = [10, 0, -33, np.pi, np.pi/2, 15]
+    centers = [(0, 0), (20, 3), (3, 30), (-10, 10), (-1, 1), (-5, -5)]
+    for deg in degs:
+        for center in centers:
+            m = rotation_around(deg, center)
+            assert np.allclose(deg, np.rad2deg(-np.arcsin(m.params[0,1])))
+            #assert np.allclose(deg, np.rad2deg(np.arccos(m.params[0,0])))
+            assert np.allclose(m.params[2, 2], 1.)  # this elem in the rot matrix should alwyas be 1
+            assert np.allclose(m.params[2, :], [0., 0., 1.])  # row should be 0, 0, 1
