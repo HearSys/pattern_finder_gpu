@@ -118,11 +118,11 @@ class PatternFinder():
         if image.ndim == 2:
             num_channels = 1
         else:
-            if sys.platform.startswith('win') and 'geforce' in self.ctx.devices[0].name.lower() and image.shape[2] == 3:
-                # This is a hack for Windows/nVidia, as we believe and found so
-                # far for various GeFoce cards that the nvidia OpenCL
+            if 'nvidia' in self.ctx.devices[0].vendor.lower() and image.shape[2] == 3:
+                # This is a hack for nVidia, as we believe and found so
+                # far for various GeFoce / Tesla cards that the nvidia OpenCL
                 # implementation sucks. Reporting an out-of-resources error when
-                # trying to upload an RGB three channel image to the GPU
+                # trying to upload an RGB three channel image to the GPU or silently failing.
                 # Quite counterintuitively adding an unneeded fourth channel
                 # makes the out-of-resources error go away. FIXME if you can.
                 tmp = image
